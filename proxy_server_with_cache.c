@@ -1,4 +1,4 @@
-#include "proxy_parse.h"
+#include "proxy_parse.h" //for parsing http requests
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
