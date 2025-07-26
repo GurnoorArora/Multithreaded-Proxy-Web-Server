@@ -31,12 +31,15 @@ struct cache_element{
     cache_element* next;    //pointer to next element
 };
 
+//function declarations
 cache_element* find(char* url);
 int add_cache_element(char* data,int size,char* url);
 void remove_cache_element();
 
+
+//port for running the server
 int port_number = 8080;				// Default Port
-int proxy_socketId;					// socket descriptor of proxy server
+int proxy_socketId;				// socket descriptor of proxy server
 pthread_t tid[MAX_CLIENTS];         //array to store the thread ids of clients
 sem_t seamaphore;	                //if client requests exceeds the max_clients this seamaphore puts the
                                     //waiting threads to sleep and wakes them when traffic on queue decreases
@@ -365,42 +368,61 @@ int main(int argc, char * argv[]) {
 
 	int client_socketId, client_len; // client_socketId == to store the client socket id
 	struct sockaddr_in server_addr, client_addr; // Address of client and server to be assigned
+	//struct sockaddr holds Internet addresses of two things basically, server_addr is the address of my own proxy server and client_addr is the address of client that connects to us
+	//Inside struct sockaddr_in, it holds three important key information
+	//1 Address Family- this means what kind of address is this for our case its always IPv4
+	//2 Ip Address
+	//port number
+	//In short the line is preparing two empty boxes,one is to write our own address and the other one is client's address
 
     sem_init(&seamaphore,0,MAX_CLIENTS); // Initializing seamaphore and lock
+    //this line creates a counter ,that no more than MAX_CLIENTS threads are actively handling requests at any given moment
     pthread_mutex_init(&lock,NULL); // Initializing lock for cache
-    
+    //we add a lock to our cache which ensures that at a time only a single thread accesses the cache preventing data corruption
 
 	if(argc == 2)        //checking whether two arguments are received or not
 	{
+		//agr 2 arg mtlb port number bhi mention kia h server run krne se pehle
 		port_number = atoi(argv[1]);
 	}
 	else
 	{
+		
 		printf("Too few arguments\n");
 		exit(1);
 	}
 
 	printf("Setting Proxy Server Port : %d\n",port_number);
 
+	//we can basically run our code in two ways
+	// ./proxy_server
+	// ./proxy_server 8080
+	//the operating system gives our main function two special variables, one is argc(this tells the count of arguments) and the other one is argv(an array of strings containing the actual words)
+	//so we check if 2 argumens were given, if yes, the argv=["./proxy_server","8080"] so argv[1] is the value of the port number specified by the user running the server
+
     //creating the proxy socket
 	proxy_socketId = socket(AF_INET, SOCK_STREAM, 0);
+	//this is creating a main entry point for our server
+	//AF_INET defines the communication protocol we are gonna follow IPv4
+	//SOCK_STREAM defines a TCP connection
 
 	if( proxy_socketId < 0)
 	{
 		perror("Failed to create socket.\n");
-		exit(1);
+		exit(1); //this immediately stops the program
 	}
 
 	int reuse =1;
-	if (setsockopt(proxy_socketId, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse)) < 0) 
-        perror("setsockopt(SO_REUSEADDR) failed\n");
+	if (setsockopt(proxy_socketId, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse)) < 0)  //when we stop the server and immediately try to run the sevrer again, without this function call, well get a message with a "address already in use warning"
+		//this immediately delocates the port address
+        perror("setsockopt(SO_REUSEADDR) failed\n");//error prinitng statement
 
-	bzero((char*)&server_addr, sizeof(server_addr));  
-	server_addr.sin_family = AF_INET;
-	server_addr.sin_port = htons(port_number); // Assigning port to the Proxy
+	bzero((char*)&server_addr, sizeof(server_addr));  //clears out the proxy server address ,filling it with zeros
+	server_addr.sin_family = AF_INET;//sets the address family to AF_INET
+	server_addr.sin_port = htons(port_number); // Assigning port to the Proxy  //htons is a function,internet has a standard way of ordering numbers in a packet, hton takes the input in the form of computer format and change it to internet format
 	server_addr.sin_addr.s_addr = INADDR_ANY; // Any available adress assigned
 
-    // Binding the socket
+    // Binding the socket //bind functions takes our socket and attaches it to the network address we specified (the IP address and the port number)
 	if( bind(proxy_socketId, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0 )
 	{
 		perror("Port is not free\n");
@@ -429,7 +451,9 @@ int main(int argc, char * argv[]) {
 
         // Accepting the connections
 		client_socketId = accept(proxy_socketId, (struct sockaddr*)&client_addr,(socklen_t*)&client_len);	// Accepts connection
-		if(client_socketId < 0)
+		//whenever a client to connects, accept functions does two things, it creates a brand new socket ,just for communicating with this client and fills the client_addr variable with the client's IP  address and port numbers 
+		//the originl proxy_socketId is now free to go back to listening other clients
+		if(client_socketId < 0)//if the accept function fails
 		{
 			fprintf(stderr, "Error in Accepting connection !\n");
 			exit(1);
@@ -441,7 +465,10 @@ int main(int argc, char * argv[]) {
 		// Getting IP address and port number of client
 		struct sockaddr_in* client_pt = (struct sockaddr_in*)&client_addr;
 		struct in_addr ip_addr = client_pt->sin_addr;
-		char str[INET_ADDRSTRLEN];										// INET_ADDRSTRLEN: Default ip address size
+		//struct in_addr is a standard C structure ,its a container specifically designed to hold IPv4 addresses in its raw and numerical form
+		char str[INET_ADDRSTRLEN];	
+		// INET_ADDRSTRLEN: Default ip address size
+		//INET_ADDRSTRLEN is a predefined constant, Its value is the exact number of characters required to hold the longest possible IP address text string (it's big enough for both older IPv4 and newer IPv6 addresses).
 		inet_ntop( AF_INET, &ip_addr, str, INET_ADDRSTRLEN );
 		printf("Client is connected with port number: %d and ip address: %s \n",ntohs(client_addr.sin_port), str);
 		//printf("Socket values of index %d in main function is %d\n",i, client_socketId);
